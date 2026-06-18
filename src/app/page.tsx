@@ -742,6 +742,8 @@ function Home() {
   const [chartDisplayTimeframe, setChartDisplayTimeframe] = useLocalStorage<ChartTimeframe>('chartDisplayTimeframe', 'ticks');
   
   const [isClient, setIsClient] = useState(false);
+  const [hasAutoConnected, setHasAutoConnected] = useState(false);
+  
   useEffect(() => {
     setIsClient(true);
   }, []);
@@ -1216,8 +1218,66 @@ function Home() {
         completeStop("by user");
     }
   }, [completeStop, addLog]);
+
+  const completeConnection = useCallback(async (appId: string, patToken: string, accountId: string) => {
+    try {
+      addLog(`Connecting to account ${accountId}...`);
+      const api = new DerivAPI(appId, patToken, accountId);
+      derivApiRef.current = api;
+
+      await api.connect();
+      addLog("WebSocket connected successfully!");
+
+      // Authorize (optional, since OTP URL handles auth)
+      addLog("Authorizing...");
+      const authResponse = await api.authorize();
+      updateState('stats', prev => ({ 
+        ...prev, 
+        balance: authResponse.authorize.balance,
+        derivId: authResponse.authorize.loginid,
+      }));
+      addLog(`Authorized as ${authResponse.authorize.loginid}. Balance: $${authResponse.authorize.balance.toFixed(2)}`);
+      
+      // FIRST: Set default markets and selected market BEFORE any other steps!
+      const defaultMarkets = [
+        { value: '1HZ10V', label: 'Volatility 10 Index' },
+        { value: '1HZ25V', label: 'Volatility 25 Index' },
+        { value: '1HZ50V', label: 'Volatility 50 Index' },
+        { value: '1HZ75V', label: 'Volatility 75 Index' },
+        { value: '1HZ100V', label: 'Volatility 100 Index' },
+        { value: 'R_10', label: 'Boom 500 Index' },
+        { value: 'R_25', label: 'Crash 500 Index' },
+      ];
+      setMarkets(defaultMarkets);
+      const defaultMarket = defaultMarkets[0];
+      setSelectedMarket(defaultMarket.value);
+      addLog(`Default market: ${defaultMarket.label}`);
+      
+      // We'll just use our default markets for reliable testing!
+      addLog("Using default test markets for reliable trading.");
+      // We already set the markets and selected market above, so nothing else needed here!
+
+      // Subscribe to balance updates
+      api.subscribeToBalance((balance: number) => {
+        updateState('stats', prev => ({...prev, balance}));
+      });
+      
+      setIsConnected(true);
+      setIsConnecting(false);
+      toast({ title: "Connected!", description: `Logged in as ${authResponse.authorize.loginid}` });
+      addLog("Successfully connected to Deriv API.");
+
+    } catch (error: any) {
+      const raw = getErrorMessage(error);
+      console.log('completeConnection error:', raw);
+      toast({ title: "Connection Failed", description: raw, variant: "destructive" });
+      addLog(`Connection failed: ${raw}`);
+      setIsConnected(false);
+      setIsConnecting(false);
+    }
+  }, [addLog, updateState, setSelectedMarket, toast]);
   
-  const handleConnect = async () => {
+  const handleConnect = useCallback(async () => {
     console.log('handleConnect: called with raw values', { apiToken, appId });
     
     const trimmedToken = apiToken.trim();
@@ -1283,68 +1343,10 @@ function Home() {
       setIsConnecting(false);
       setIsLoadingAccounts(false);
     }
-  }
-
-  const completeConnection = async (appId: string, patToken: string, accountId: string) => {
-    try {
-      addLog(`Connecting to account ${accountId}...`);
-      const api = new DerivAPI(appId, patToken, accountId);
-      derivApiRef.current = api;
-
-      await api.connect();
-      addLog("WebSocket connected successfully!");
-
-      // Authorize (optional, since OTP URL handles auth)
-      addLog("Authorizing...");
-      const authResponse = await api.authorize();
-      updateState('stats', prev => ({ 
-        ...prev, 
-        balance: authResponse.authorize.balance,
-        derivId: authResponse.authorize.loginid,
-      }));
-      addLog(`Authorized as ${authResponse.authorize.loginid}. Balance: $${authResponse.authorize.balance.toFixed(2)}`);
-      
-      // FIRST: Set default markets and selected market BEFORE any other steps!
-      const defaultMarkets = [
-        { value: '1HZ10V', label: 'Volatility 10 Index' },
-        { value: '1HZ25V', label: 'Volatility 25 Index' },
-        { value: '1HZ50V', label: 'Volatility 50 Index' },
-        { value: '1HZ75V', label: 'Volatility 75 Index' },
-        { value: '1HZ100V', label: 'Volatility 100 Index' },
-        { value: 'R_10', label: 'Boom 500 Index' },
-        { value: 'R_25', label: 'Crash 500 Index' },
-      ];
-      setMarkets(defaultMarkets);
-      const defaultMarket = defaultMarkets[0];
-      setSelectedMarket(defaultMarket.value);
-      addLog(`Default market: ${defaultMarket.label}`);
-      
-      // We'll just use our default markets for reliable testing!
-      addLog("Using default test markets for reliable trading.");
-      // We already set the markets and selected market above, so nothing else needed here!
-
-      // Subscribe to balance updates
-      api.subscribeToBalance((balance: number) => {
-        updateState('stats', prev => ({...prev, balance}));
-      });
-      
-      setIsConnected(true);
-      setIsConnecting(false);
-      toast({ title: "Connected!", description: `Logged in as ${authResponse.authorize.loginid}` });
-      addLog("Successfully connected to Deriv API.");
-
-    } catch (error: any) {
-      const raw = getErrorMessage(error);
-      console.log('completeConnection error:', raw);
-      toast({ title: "Connection Failed", description: raw, variant: "destructive" });
-      addLog(`Connection failed: ${raw}`);
-      setIsConnected(false);
-      setIsConnecting(false);
-    }
-  };
+  }, [apiToken, appId, selectedAccountId, completeConnection, toast, addLog]);
 
 
-  const handleDisconnect = () => {
+  const handleDisconnect = useCallback(() => {
     if (isBotActiveRef.current) {
         handleStopBot();
     }
@@ -1356,6 +1358,7 @@ function Home() {
     derivApiRef.current?.close();
     derivApiRef.current = null;
     setIsConnected(false);
+    setHasAutoConnected(false); // Reset auto-connect flag for next time
     // Don't clear markets or accounts - keep them for reconnection!
     updateState('stats', {
         balance: 0,
@@ -1371,7 +1374,16 @@ function Home() {
     // Keep event logs for history
     addLog("Disconnected from Deriv API.");
     toast({ title: "Disconnected", description: "You have been logged out." });
-  };
+  }, [handleStopBot, updateState, addLog, toast]);
+
+  // Auto-connect on mount if we have a saved API token
+  useEffect(() => {
+    if (isClient && apiToken && apiToken.trim() && !hasAutoConnected && !isConnected && !isConnecting) {
+      console.log('Auto-connecting with saved token...');
+      setHasAutoConnected(true);
+      handleConnect();
+    }
+  }, [isClient, apiToken, hasAutoConnected, isConnected, isConnecting, handleConnect]);
   
   const handleStartBot = () => {
     if (!derivApiRef.current || !selectedMarket ) {
