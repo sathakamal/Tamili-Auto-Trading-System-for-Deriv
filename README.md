@@ -4,9 +4,8 @@ An advanced, automated trading bot for the Deriv platform, built with Next.js an
 
 ## Screenshots
 
-![Dashboard Overview](./docs/dashboard.png)
-![Live Chart & Indicators](./docs/chart.png)
-![Trade History](./docs/trade-history.png)
+![Dashboard Overview](dashboard.png)
+
 
 ## Features
 
