@@ -2,6 +2,12 @@
 
 An advanced, automated trading bot for the Deriv platform, built with Next.js and TypeScript. Features real-time charting, 40+ technical indicators, AI-powered signal prediction, and automatic trade execution.
 
+## Screenshots
+
+![Dashboard Overview](./docs/dashboard.png)
+![Live Chart & Indicators](./docs/chart.png)
+![Trade History](./docs/trade-history.png)
+
 ## Features
 
 ### 📊 Real-Time Charting & Analysis
@@ -66,8 +72,8 @@ Includes:
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/your-username/tamil-auto-trading-system.git
-cd tamil-auto-trading-system
+git clone https://github.com/sathakamal/Tamili-Auto-Trading-System-for-Deriv.git
+cd Tamili-Auto-Trading-System-for-Deriv
 ```
 
 2. Install dependencies:
