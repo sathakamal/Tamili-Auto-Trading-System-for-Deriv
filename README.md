@@ -152,7 +152,7 @@ This project is provided as-is for educational purposes.
 
 ## Author
 
-Tamili
+ARUMUGAM OMSATHASIVAM
 
 ## Disclaimer
 
